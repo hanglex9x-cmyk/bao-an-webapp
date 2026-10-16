@@ -77,13 +77,29 @@ function firstEmptyRow_(sheetName, colLetter, startRow, maxRow) { var s = sh_(sh
 
 /* ============ TẠO ĐƠN BÁN HÀNG ============ */
 function getBootstrap() { return { config: getConfig(), user: getCurrentUser(), customers: getCustomers(), products: getProducts(), brands: BRANDS, units: UNITS, today: todayStr_(), nextInvoice: nextNo_('NhatKyBanHang', 2, 'HD') }; }
+
+/* Tìm khách theo mã/tên; chưa có thì tự tạo với mã KH tự động (dùng khi lập đơn gõ tên khách) */
+function resolveCustomer_(p) {
+  var cus = readCustomers_();
+  var ma = String(p.maKH||'').trim();
+  if (ma && cus.some(function(c){return c.ma===ma;})) { p.maKH = ma; return ''; }
+  var ten = String(p.tenKH||'').trim(); if (!ten) throw new Error('Chưa nhập tên khách hàng.');
+  var found = null; cus.forEach(function(c){ if (String(c.ten||'').trim().toLowerCase() === ten.toLowerCase()) found = c; });
+  if (found) { p.maKH = found.ma; return ''; }
+  var s = sh_('KhachHang'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : [];
+  var mx = 0; v.forEach(function(r){ var mm = String(r[0]||'').match(/^KH(\d+)$/i); if (mm) { var nn = parseInt(mm[1],10); if (nn>mx) mx=nn; } });
+  var num = String(mx+1); while (num.length<3) num='0'+num; var maMoi = 'KH'+num;
+  var row = 4 + v.filter(function(r){return r[0];}).length; if (row>103) throw new Error('Đã đủ 100 khách trong khung file gốc.');
+  s.getRange(row,1,1,9).setValues([[maMoi, ten, String(p.loaiKH||'Khách lẻ'), String(p.sdtKH||''), '', 0, 30, 0, 'Tạo tự động khi lập đơn']]);
+  p.maKH = maMoi; return maMoi;
+}
 function createInvoice(p) {
   requireRole_(['Admin','BanHang']);
-  if (!p || !p.maKH) throw new Error('Chưa chọn khách hàng.');
+  if (!p || (!p.maKH && !String(p.tenKH||'').trim())) throw new Error('Chưa nhập tên khách hàng.');
   if (!p.items || !p.items.length) throw new Error('Đơn chưa có mặt hàng nào.');
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
-    var kh = null; readCustomers_().forEach(function(c){ if(c.ma===p.maKH) kh=c; }); if (!kh) throw new Error('Không tìm thấy khách ' + p.maKH);
+    var khMoi = resolveCustomer_(p); var kh = null; readCustomers_().forEach(function(c){ if(c.ma===p.maKH) kh=c; }); if (!kh) throw new Error('Không tìm thấy khách ' + p.maKH);
     var prods = {}; readProducts_().forEach(function(x){ prods[x.ma]=x; }); var st = stockMap_();
     var total = 0; p.items.forEach(function(it){ if (!prods[it.maSP]) throw new Error('Không có sản phẩm ' + it.maSP); var sl = money_(it.sl); if (sl<=0) throw new Error('Số lượng phải lớn hơn 0: ' + it.maSP); var gia = it.gia!=='' && it.gia!==undefined && it.gia!==null ? money_(it.gia) : prods[it.maSP].gia; var ck = pct_(it.ck); total += sl*gia*(1-ck); var ton = st[it.maSP] ? st[it.maSP].ton : prods[it.maSP].tonDau; if (!p.choVuotTon && ton < sl) throw new Error('Không đủ tồn: ' + prods[it.maSP].ten + ' còn ' + ton + ' ' + prods[it.maSP].dvt + ', đơn cần ' + sl); });
     var soHD = nextNo_('NhatKyBanHang', 2, 'HD'); var ngay = parseDate_(p.ngay);
@@ -99,7 +115,7 @@ function createInvoice(p) {
     var soPT = ''; if (traNgay>0) { soPT = ghiThuTien_(ngay, p.maKH, traNgay, p.hinhThuc||'Tiền mặt', soHD, 'Thu đợt 1 - trả ngay khi xuất đơn ' + soHD); }
     // Tích điểm theo hoá đơn (có công tắc DiemBatTat trong CauHinh)
     var cfg = getConfig(); var diemBat = !(cfg.DiemBatTat===0 || cfg.DiemBatTat==='0' || cfg.DiemBatTat===false || cfg.DiemBatTat==='false'); var diem = diemBat ? Math.floor(total / (cfg.TienCho1Diem || 10000)) : 0; var ds = sh_('DiemTichLuy'); if (ds && diem>0) ds.appendRow([ngay, p.maKH, kh.ten, soHD, total, diem, 0, '', 'Tích điểm theo hoá đơn: ' + Math.round(cfg.TienCho1Diem).toLocaleString('vi-VN') + 'đ = 1 điểm']);
-    return { soHD: soHD, soPT: soPT, tongTien: total, traNgay: traNgay, conNo: total-traNgay, diemCong: diem, tenKH: kh.ten };
+    return { soHD: soHD, soPT: soPT, tongTien: total, traNgay: traNgay, conNo: total-traNgay, diemCong: diem, tenKH: kh.ten, khMoi: khMoi };
   } finally { lock.releaseLock(); }
 }
 function ghiThuTien_(ngay, maKH, soTien, hinhThuc, soHD, ghiChu) { var s = sh_('ThuTien'); var row = firstEmptyRow_('ThuTien','B',4,2003); var soPT = nextThuNo_(); s.getRange(row,1).setValue(ngay); s.getRange(row,2).setValue(soPT); s.getRange(row,3).setValue(maKH); s.getRange(row,5).setValue(soTien); s.getRange(row,6).setValue(hinhThuc||'Tiền mặt'); s.getRange(row,7).setValue(soHD||''); s.getRange(row,8).setValue(ghiChu||''); SpreadsheetApp.flush(); return soPT; }
