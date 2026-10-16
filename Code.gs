@@ -61,7 +61,16 @@ function stockMap_() { var nhap = {}, xuat = {}; var n = sh_('NhapKho'); if (n &
 function getProducts() { var st = stockMap_(); return readProducts_().map(function(p){ p.ton = st[p.ma] ? st[p.ma].ton : p.tonDau; p.nhap = st[p.ma] ? st[p.ma].nhap : 0; p.xuat = st[p.ma] ? st[p.ma].xuat : 0; return p; }); }
 function getCustomers() { var pts = pointsMap_(); var debt = debtMap_(); return readCustomers_().map(function(c){ c.diem = pts[c.ma]||0; c.noHienTai = debt[c.ma]!==undefined ? debt[c.ma] : c.noDauKy; return c; }); }
 function saveCustomer(c) { requireRole_(['Admin','BanHang','KeToan']); var s = sh_('KhachHang'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; c.ma = String(c.ma||'').trim(); if (!String(c.ten||'').trim()) throw new Error('Chưa nhập tên khách hàng.'); if (!c.ma) { var mx=0; v.forEach(function(r){ var mm=String(r[0]||'').match(/^KH(\d+)$/i); if (mm) { var nn=parseInt(mm[1],10); if (nn>mx) mx=nn; } }); var num=String(mx+1); while(num.length<3) num='0'+num; c.ma='KH'+num; } for (var i=0;i<v.length;i++){ if (v[i][0]===c.ma) { s.getRange(i+4,1,1,9).setValues([[c.ma,c.ten,c.loai||'',c.sdt||'',c.tinh||'',money_(c.hanMuc),money_(c.kyHan)||30,money_(c.noDauKy),c.ghiChu||'']]); return getCustomers(); } } var row = 4 + v.filter(function(r){return r[0];}).length; if (row>103) throw new Error('Đã đủ 100 khách trong khung file gốc. Hãy liên hệ để mở rộng.'); s.getRange(row,1,1,9).setValues([[c.ma,c.ten,c.loai||'',c.sdt||'',c.tinh||'',money_(c.hanMuc),money_(c.kyHan)||30,money_(c.noDauKy),c.ghiChu||'']]); return getCustomers(); }
-function saveProduct(p) { requireRole_(['Admin','Kho']); var s = sh_('SanPham'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; var row = [p.ma,p.nhom,p.ten,p.dvt,money_(p.gia),money_(p.tonDau),money_(p.tonMin)||5,p.hinh||'',money_(p.giaVon)]; for (var i=0;i<v.length;i++){ if (v[i][0]===p.ma) { s.getRange(i+4,1,1,9).setValues([row]); return getProducts(); } } var rowN = 4 + v.filter(function(r){return r[0];}).length; if (rowN>103) throw new Error('Đã đủ 100 sản phẩm trong khung file gốc.'); s.getRange(rowN,1,1,9).setValues([row]); return getProducts(); }
+function saveProduct(p) { requireRole_(['Admin','Kho']);
+  if (!p.ma) { // để trống mã -> tự cấp theo tiền tố hãng/nhóm
+    var preMap = { 'Nippon':'NIP', 'Jotun':'JOT', 'Dulux':'DUL', 'TOA':'TOA', 'Phụ kiện':'PK', 'Vật tư':'VT', 'Thiết bị':'VT' };
+    var pre = preMap[p.nhom] || 'SP'; var ss0 = sh_('SanPham'); var vv = ss0.getLastRow()>=4 ? ss0.getRange(4,1,ss0.getLastRow()-3,1).getValues() : []; var mx = 0;
+    vv.forEach(function(r){ var mm = String(r[0]||'').match(new RegExp('^' + pre + '(\\d+)$','i')); if (mm) { var nn = parseInt(mm[1],10); if (nn>mx) mx=nn; } });
+    var num = String(mx+1); while (num.length<3) num='0'+num; p.ma = pre + num;
+  }
+  var s = sh_('SanPham'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; var row = [p.ma,p.nhom,p.ten,p.dvt,money_(p.gia),money_(p.tonDau),money_(p.tonMin)||5,p.hinh||'',money_(p.giaVon)]; for (var i=0;i<v.length;i++){ if (v[i][0]===p.ma) { s.getRange(i+4,1,1,9).setValues([row]); return getProducts(); } } var rowN = 4 + v.filter(function(r){return r[0];}).length; if (rowN>103) throw new Error('Đã đủ 100 sản phẩm trong khung file gốc.'); s.getRange(rowN,1,1,9).setValues([row]); return getProducts(); }
+
+function deleteProduct(ma) { requireRole_(['Admin','Kho']); var s = sh_('SanPham'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; for (var i=0;i<v.length;i++){ if (String(v[i][0])===String(ma)) { s.deleteRow(i+4); return getProducts(); } } throw new Error('Không tìm thấy sản phẩm ' + ma); }
 
 /* ============ CÔNG NỢ + ĐIỂM ============ */
 function debtMap_() { var s = sh_('TongHopCongNo'); var m = {}; if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,8).getValues().forEach(function(r){ if(r[0]) m[r[0]] = money_(r[7]); }); return m; }
@@ -233,7 +242,54 @@ function getCashbook() { var s = sh_('ThuChi'); if (!s || s.getLastRow()<2) retu
 function addCashEntry(p) { requireRole_(['Admin','KeToan']); var s = sh_('ThuChi'); if (!s) { caiDatHeThong(); s = sh_('ThuChi'); } s.appendRow([parseDate_(p.ngay), p.loai, p.hangMuc, money_(p.soTien), p.phuongThuc||'Tiền mặt', p.lienQuan||'', p.ghiChu||'', getCurrentUser().name]); return getCashbook(); }
 
 /* ============ DASHBOARD ============ */
-function getDashboard() { var inv = groupInvoices_(); var today = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy'); var ym = Utilities.formatDate(new Date(), TZ, 'MM/yyyy'); var doanhHomNay = inv.filter(function(o){return o.ngay===today;}).reduce(function(a,b){return a+b.tongTien;},0); var parts = ym.split('/'); var doanhThang = inv.filter(function(o){ var d=o.ngay.split('/'); return d[1]===parts[0] && d[2]===parts[1]; }).reduce(function(a,b){return a+b.tongTien;},0); var debt = getDebt(); var tongNo = debt.reduce(function(a,b){return a+b.noCuoi;},0); var tongQH = debt.reduce(function(a,b){return a+b.tongQH;},0); var stock = getStock(); var canhBaoTon = stock.filter(function(p){return p.canNhap;}); var cash = getCashbook(); var paysAll = inv.reduce(function(a,b){return a+b.daThu;},0); return { soDonHomNay: inv.filter(function(o){return o.ngay===today;}).length, doanhHomNay: doanhHomNay, doanhThang: doanhThang, tongSoDon: inv.length, tongNo: tongNo, tongQuaHan: tongQH, soKHNoQuaHan: debt.filter(function(d){return d.tongQH>0;}).length, daThuTheoDon: paysAll, conNoTheoDon: inv.reduce(function(a,b){return a+b.conNo;},0), tongThuSach: cash.tongThu, tongChiSach: cash.tongChi, canhBaoTon: canhBaoTon, topNo: debt.slice().sort(function(a,b){return b.noCuoi-a.noCuoi;}).slice(0,10), donMoiNhat: inv.slice(0,8), tongSP: stock.length, tongTon: stock.reduce(function(a,b){return a+b.ton;},0) }; }
+function mondayOf_(d){ var x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); var day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); return x; }
+function getDashboard() {
+  var inv = groupInvoices_();
+  var now = new Date(); var today = Utilities.formatDate(now, TZ, 'dd/MM/yyyy');
+  var mm = Utilities.formatDate(now, TZ, 'MM'); var yyyy = Utilities.formatDate(now, TZ, 'yyyy');
+  function dOf(o){ var d = (o.ngayObj instanceof Date) ? o.ngayObj : parseDate_(o.ngay); return (d && !isNaN(d.getTime())) ? d : null; }
+  function sameDay(d){ return d && Utilities.formatDate(d, TZ, 'dd/MM/yyyy')===today; }
+  function sameMonth(d){ return d && Utilities.formatDate(d, TZ, 'MM/yyyy')===(mm+'/'+yyyy); }
+  var invToday = inv.filter(function(o){ return sameDay(dOf(o)); });
+  var invMonth = inv.filter(function(o){ return sameMonth(dOf(o)); });
+  var doanhHomNay = invToday.reduce(function(a,b){return a+b.tongTien;},0);
+  var doanhThang = invMonth.reduce(function(a,b){return a+b.tongTien;},0);
+  var daThuHomNay = 0; var ts = sh_('ThuTien'); if (ts && ts.getLastRow()>=4) ts.getRange(4,1,ts.getLastRow()-3,5).getValues().forEach(function(r){ if (fmtDate_(r[0])===today) daThuHomNay += money_(r[4]); });
+  var laiGop = 0; try { laiGop = getProfit(yyyy+'-'+mm+'-01', Utilities.formatDate(now, TZ, 'yyyy-MM-dd')).tongLai; } catch(e) {}
+  var chiPhiThang = 0; getCashbook().rows.forEach(function(r){ var p = String(r.ngay||'').split('/'); if (p[1]===mm && p[2]===yyyy && r.loai==='Chi') chiPhiThang += r.soTien; });
+  var debt = getDebt(); var tongNo = debt.reduce(function(a,b){return a+b.noCuoi;},0); var tongQH = debt.reduce(function(a,b){return a+b.tongQH;},0);
+  var stock = getStock(); var canhBaoTon = stock.filter(function(p){return p.canNhap;});
+  var cash = getCashbook(); var paysAll = inv.reduce(function(a,b){return a+b.daThu;},0);
+  function key(d){ return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
+  var days=[]; var dmap={}; for (var i=13;i>=0;i--){ var dd=new Date(now.getFullYear(), now.getMonth(), now.getDate()-i); var k=key(dd); dmap[k]=0; days.push({label: Utilities.formatDate(dd, TZ, 'dd/MM'), val: 0, k:k}); }
+  var wmap={}; var weeks=[]; var mon = mondayOf_(now); for (var w=7;w>=0;w--){ var wd=new Date(mon.getFullYear(), mon.getMonth(), mon.getDate()-7*w); var wk=key(wd); wmap[wk]=0; weeks.push({label: Utilities.formatDate(wd, TZ, 'dd/MM'), val:0, k:wk}); }
+  var mmap={}; var months=[]; for (var m2=1;m2<=12;m2++){ mmap[m2]=0; months.push({label:'T'+m2, val:0, m:m2}); }
+  inv.forEach(function(o){ var d=dOf(o); if(!d) return; var k=key(d); if (dmap[k]!==undefined) dmap[k]+=o.tongTien; var mk=key(mondayOf_(d)); if (wmap[mk]!==undefined) wmap[mk]+=o.tongTien; if (d.getFullYear()===now.getFullYear()) mmap[d.getMonth()+1]+=o.tongTien; });
+  days.forEach(function(x){ x.val=dmap[x.k]; delete x.k; }); weeks.forEach(function(x){ x.val=wmap[x.k]; delete x.k; }); months.forEach(function(x){ x.val=mmap[x.m]; delete x.m; });
+  var bcMap={}; var prodMap={}; readProducts_().forEach(function(p){ prodMap[p.ma]=p; });
+  invMonth.forEach(function(o){ linesOfInvoice_(o.soHD).forEach(function(l){ if (l.sl<=0) return; if(!bcMap[l.maSP]) bcMap[l.maSP]={ma:l.maSP, ten: prodMap[l.maSP]?prodMap[l.maSP].ten:l.maSP, dvt: prodMap[l.maSP]?prodMap[l.maSP].dvt:'', sl:0, doanh:0}; bcMap[l.maSP].sl+=l.sl; bcMap[l.maSP].doanh+=l.tt; }); });
+  var banChay = Object.keys(bcMap).map(function(k){return bcMap[k];}).sort(function(a,b){ return b.sl-a.sl || b.doanh-a.doanh; }).slice(0,5);
+  var donConNo = inv.filter(function(o){ return o.conNo>0 && o.trangThaiDon!=='Đã hoàn'; });
+  var xuLy = { donConNoN: donConNo.length, donConNoTong: donConNo.reduce(function(a,b){return a+b.conNo;},0), khachNoN: debt.filter(function(d){return d.noCuoi>0;}).length, quaHanTong: tongQH, quaHanKH: debt.filter(function(d){return d.tongQH>0;}).length, donChuaGiao: inv.filter(function(o){ return o.trangThaiDon==='Mới'||o.trangThaiDon==='Đang giao'; }).length, spCanNhap: canhBaoTon.length, spAmKho: stock.filter(function(p){return p.ton<0;}).length };
+  return { soDonHomNay: invToday.length, doanhHomNay: doanhHomNay, doanhThang: doanhThang, tongSoDon: inv.length, tongNo: tongNo, tongQuaHan: tongQH, soKHNoQuaHan: xuLy.quaHanKH, daThuTheoDon: paysAll, conNoTheoDon: inv.reduce(function(a,b){return a+b.conNo;},0), tongThuSach: cash.tongThu, tongChiSach: cash.tongChi, canhBaoTon: canhBaoTon, topNo: debt.slice().sort(function(a,b){return b.noCuoi-a.noCuoi;}).slice(0,10), donMoiNhat: inv.slice(0,8), tongSP: stock.length, tongTon: stock.reduce(function(a,b){return a+b.ton;},0), todayStr: today, monthStr: mm+'/'+yyyy, homNay: { soDon: invToday.length, doanh: doanhHomNay, daThu: daThuHomNay, conNo: invToday.reduce(function(a,b){return a+b.conNo;},0) }, thang: { doanh: doanhThang, laiGop: laiGop, chiPhi: chiPhiThang, loiNhuan: laiGop-chiPhiThang, soDon: invMonth.length }, xuLy: xuLy, rev: { days: days, weeks: weeks, months: months }, banChayThang: banChay, canDatThem: canhBaoTon.slice().sort(function(a,b){return a.ton-b.ton;}).slice(0,8) };
+}
+
+/* ============ BÁO CÁO XUẤT NHẬP TỒN THEO KỲ ============ */
+function getXNT(tu, den) {
+  requireRole_(['Admin','BanHang','Kho','KeToan','Xem']);
+  var dTu = tu ? parseDate_(tu) : null; var dDen = den ? parseDate_(den) : new Date(); if (dDen) dDen.setHours(23,59,59,999);
+  function inR(d){ return d && (!dTu || d>=dTu) && (!dDen || d<=dDen); }
+  function bef(d){ return d && dTu && d<dTu; }
+  function dOf(v){ var d = (v instanceof Date) ? v : parseDate_(fmtDate_(v)); return (d && !isNaN(d.getTime())) ? d : null; }
+  var nT={}, nK={}, xT={}, xK={};
+  var ns = sh_('NhapKho'); if (ns && ns.getLastRow()>=2) ns.getRange(2,1,ns.getLastRow()-1,5).getValues().forEach(function(r){ if(!r[1]) return; var d=dOf(r[0]); if(!d) return; var m=String(r[1]); if (bef(d)) nT[m]=(nT[m]||0)+money_(r[4]); else if (inR(d)) nK[m]=(nK[m]||0)+money_(r[4]); });
+  var bs = sh_('NhatKyBanHang'); if (bs && bs.getLastRow()>=4) bs.getRange(4,1,bs.getLastRow()-3,8).getValues().forEach(function(r){ if(!r[4]) return; var d=dOf(r[0]); if(!d) return; var m=String(r[4]); var sl=money_(r[7]); if (bef(d)) xT[m]=(xT[m]||0)+sl; else if (inR(d)) xK[m]=(xK[m]||0)+sl; });
+  var rows = readProducts_().map(function(p){ var td = p.tonDau + (nT[p.ma]||0) - (xT[p.ma]||0); var nk = nK[p.ma]||0; var xk = xK[p.ma]||0; return { ma:p.ma, nhom:p.nhom, ten:p.ten, dvt:p.dvt, tonDauKy:td, nhap:nk, xuat:xk, tonCuoi:td+nk-xk }; });
+  return { rows: rows, tu: tu||'', den: den||'' };
+}
+
+/* ============ LỊCH SỬ MUA HÀNG THEO KHÁCH ============ */
+function getCustomerHistory(maKH) { requireRole_(['Admin','BanHang','Kho','KeToan','Xem']); var kh=null; readCustomers_().forEach(function(c){ if(c.ma===maKH) kh=c; }); var orders = groupInvoices_().filter(function(o){ return o.maKH===maKH; }); return { kh: kh, orders: orders }; }
 
 /* ============ CÀI ĐẶT HỆ THỐNG + MENU ============ */
 function caiDatHeThong() { var book = ss_();
