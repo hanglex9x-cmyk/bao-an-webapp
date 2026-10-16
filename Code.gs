@@ -59,7 +59,7 @@ function readCustomers_() { var s = sh_('KhachHang'); if (!s || s.getLastRow()<4
 function readProducts_() { var s = sh_('SanPham'); if (!s || s.getLastRow()<4) return []; var last = s.getLastRow(); var vals = s.getRange(4,1,last-3,9).getValues(); return vals.filter(function(r){return r[0];}).map(function(r){ return { ma:r[0], nhom:r[1]||'', ten:r[2], dvt:r[3]||'', gia:money_(r[4]), tonDau:money_(r[5]), tonMin:money_(r[6]), hinh:String(r[7]||''), giaVon:money_(r[8]) }; }); }
 function stockMap_() { var nhap = {}, xuat = {}; var n = sh_('NhapKho'); if (n && n.getLastRow()>=2) n.getRange(2,2,n.getLastRow()-1,4).getValues().forEach(function(r){ if(r[0]) nhap[r[0]] = (nhap[r[0]]||0) + money_(r[3]); }); var s = sh_('NhatKyBanHang'); if (s && s.getLastRow()>=4) s.getRange(4,5,s.getLastRow()-3,4).getValues().forEach(function(r){ if(r[0]) xuat[r[0]] = (xuat[r[0]]||0) + money_(r[3]); }); var m = {}; readProducts_().forEach(function(p){ var ton = p.tonDau + (nhap[p.ma]||0) - (xuat[p.ma]||0); m[p.ma] = { ton: ton, nhap: nhap[p.ma]||0, xuat: xuat[p.ma]||0 }; }); return m; }
 function getProducts() { var st = stockMap_(); return readProducts_().map(function(p){ p.ton = st[p.ma] ? st[p.ma].ton : p.tonDau; p.nhap = st[p.ma] ? st[p.ma].nhap : 0; p.xuat = st[p.ma] ? st[p.ma].xuat : 0; return p; }); }
-function getCustomers() { var pts = pointsMap_(); var debt = debtMap_(); return readCustomers_().map(function(c){ c.diem = pts[c.ma]||0; c.noHienTai = debt[c.ma]!==undefined ? debt[c.ma] : c.noDauKy; return c; }); }
+function getCustomers() { var pts = pointsMap_(); var debt = debtMap_(); var mua = {}; var dh = sh_('DonHang'); if (dh && dh.getLastRow()>=2) dh.getRange(2,1,dh.getLastRow()-1,5).getValues().forEach(function(r){ if (r[2]) mua[r[2]] = (mua[r[2]]||0) + money_(r[4]); }); return readCustomers_().map(function(c){ c.diem = pts[c.ma]||0; c.noHienTai = debt[c.ma]!==undefined ? debt[c.ma] : c.noDauKy; c.tongMua = mua[c.ma]||0; return c; }); }
 function saveCustomer(c) { requireRole_(['Admin','BanHang','KeToan']); var s = sh_('KhachHang'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; c.ma = String(c.ma||'').trim(); if (!String(c.ten||'').trim()) throw new Error('Chưa nhập tên khách hàng.'); if (!c.ma) { var mx=0; v.forEach(function(r){ var mm=String(r[0]||'').match(/^KH(\d+)$/i); if (mm) { var nn=parseInt(mm[1],10); if (nn>mx) mx=nn; } }); var num=String(mx+1); while(num.length<3) num='0'+num; c.ma='KH'+num; } for (var i=0;i<v.length;i++){ if (v[i][0]===c.ma) { s.getRange(i+4,1,1,9).setValues([[c.ma,c.ten,c.loai||'',c.sdt||'',c.tinh||'',money_(c.hanMuc),money_(c.kyHan)||30,money_(c.noDauKy),c.ghiChu||'']]); return getCustomers(); } } var row = 4 + v.filter(function(r){return r[0];}).length; if (row>103) throw new Error('Đã đủ 100 khách trong khung file gốc. Hãy liên hệ để mở rộng.'); s.getRange(row,1,1,9).setValues([[c.ma,c.ten,c.loai||'',c.sdt||'',c.tinh||'',money_(c.hanMuc),money_(c.kyHan)||30,money_(c.noDauKy),c.ghiChu||'']]); return getCustomers(); }
 function saveProduct(p) { requireRole_(['Admin','Kho']);
   if (!p.ma) { // để trống mã -> tự cấp theo tiền tố hãng/nhóm
@@ -130,7 +130,9 @@ function createInvoice(p) {
 function ghiThuTien_(ngay, maKH, soTien, hinhThuc, soHD, ghiChu) { var s = sh_('ThuTien'); var row = firstEmptyRow_('ThuTien','B',4,2003); var soPT = nextThuNo_(); s.getRange(row,1).setValue(ngay); s.getRange(row,2).setValue(soPT); s.getRange(row,3).setValue(maKH); s.getRange(row,5).setValue(soTien); s.getRange(row,6).setValue(hinhThuc||'Tiền mặt'); s.getRange(row,7).setValue(soHD||''); s.getRange(row,8).setValue(ghiChu||''); SpreadsheetApp.flush(); return soPT; }
 
 /* ============ THU TIỀN THEO ĐỢT 2-3 ĐỢT + CÔNG NỢ ============ */
-function paymentsOfInvoice_(soHD) { var s = sh_('ThuTien'); var out = []; if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,8).getValues().forEach(function(r, i){ if (String(r[6]||'')===String(soHD)) out.push({ ngay:fmtDate_(r[0]), soPT:r[1], maKH:r[2], tenKH:r[3], soTien:money_(r[4]), hinhThuc:r[5], soHD:r[6], ghiChu:r[7]||'', dot: out.length+1 }); }); return out; }
+var _payAllCache = null;
+function allPayments_() { if (_payAllCache) return _payAllCache; var map = {}; var s = sh_('ThuTien'); if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,8).getValues().forEach(function(r){ if (!r[6]) return; var k = String(r[6]); if (!map[k]) map[k] = []; map[k].push({ ngay:fmtDate_(r[0]), soPT:r[1], maKH:r[2], tenKH:r[3], soTien:money_(r[4]), hinhThuc:r[5], soHD:r[6], ghiChu:r[7]||'', dot: map[k].length+1 }); }); _payAllCache = map; return map; }
+function paymentsOfInvoice_(soHD) { var m = allPayments_(); return m[String(soHD)] || []; }
 function addPayment(p) { // {soHD, maKH, soTien, hinhThuc, ngay, ghiChu}
   requireRole_(['Admin','BanHang','KeToan']); if (!p.soHD || !p.maKH) throw new Error('Thiếu số hoá đơn / khách hàng.'); var soTien = money_(p.soTien); if (soTien<=0) throw new Error('Số tiền thu phải lớn hơn 0.');
   var det = getInvoiceDetail(p.soHD); if (soTien > det.conNo + 1) throw new Error('Thu vượt số còn nợ của đơn: còn nợ ' + det.conNo.toLocaleString('vi-VN') + 'đ');
@@ -199,9 +201,9 @@ function avgCostMap_() { // giá vốn bình quân gia quyền theo từng lần
   });
   var out={}; Object.keys(m).forEach(function(k){ out[k] = m[k].sl>0 ? m[k].tien/m[k].sl : 0; }); return out;
 }
-function linesOfInvoice_(soHD) { var out=[]; var s = sh_('NhatKyBanHang');
-  if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,11).getValues().forEach(function(r){
-    if (String(r[1])===soHD) out.push({ maSP:r[4], sl:money_(r[7]), tt:money_(r[10]) }); }); return out; }
+var _linesAllCache = null;
+function allLines_() { if (_linesAllCache) return _linesAllCache; var map = {}; var s = sh_('NhatKyBanHang'); if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,11).getValues().forEach(function(r){ if (!r[1]) return; var k = String(r[1]); if (!map[k]) map[k] = []; map[k].push({ maSP:r[4], sl:money_(r[7]), tt:money_(r[10]) }); }); _linesAllCache = map; return map; }
+function linesOfInvoice_(soHD) { var m = allLines_(); return m[String(soHD)] || []; }
 function getProfit(from, to) {
   requireRole_(['Admin','BanHang','KeToan','Kho','Xem']);
   var costs = avgCostMap_(); var prodCost = {};
@@ -289,7 +291,8 @@ function getXNT(tu, den) {
 }
 
 /* ============ LỊCH SỬ MUA HÀNG THEO KHÁCH ============ */
-function getCustomerHistory(maKH) { requireRole_(['Admin','BanHang','Kho','KeToan','Xem']); var kh=null; readCustomers_().forEach(function(c){ if(c.ma===maKH) kh=c; }); var orders = groupInvoices_().filter(function(o){ return o.maKH===maKH; }); return { kh: kh, orders: orders }; }
+function getCustomerHistory(maKH) { requireRole_(['Admin','BanHang','Kho','KeToan','Xem']); var kh=null; getCustomers().forEach(function(c){ if(c.ma===maKH) kh=c; }); var orders = groupInvoices_().filter(function(o){ return o.maKH===maKH; }); var tongSP = 0; var bs = sh_('NhatKyBanHang'); if (bs && bs.getLastRow()>=4) bs.getRange(4,3,bs.getLastRow()-3,6).getValues().forEach(function(r){ if (String(r[0])===String(maKH)) tongSP += money_(r[5]); }); return { kh: kh, orders: orders, tongSP: tongSP }; }
+function deleteCustomer(ma) { requireRole_(['Admin']); if (String(ma)==='KH001') throw new Error('Không xoá được khách mặc định KH001 (Khách lẻ).'); var coDon = groupInvoices_().some(function(o){ return o.maKH===ma; }); if (coDon) throw new Error('Khách đã có đơn mua hàng — không xoá để tránh mất lịch sử.'); var kh=null; getCustomers().forEach(function(c){ if(c.ma===ma) kh=c; }); if (kh && (kh.diem>0 || kh.noHienTai>0)) throw new Error('Khách còn điểm hoặc còn nợ — không xoá được.'); var s = sh_('KhachHang'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : []; for (var i=0;i<v.length;i++){ if (String(v[i][0])===String(ma)) { s.getRange(i+4,1,1,9).clearContent(); return getCustomers(); } } throw new Error('Không tìm thấy khách ' + ma); }
 
 /* ============ CÀI ĐẶT HỆ THỐNG + MENU ============ */
 function caiDatHeThong() { var book = ss_();
