@@ -68,6 +68,7 @@ button:active{transform:scale(.97)}
 ::-webkit-scrollbar-track{background:transparent}
 }
 
+.recentWrap{overflow-x:auto}.recentWrap table{min-width:820px}.recentWrap td,.recentWrap th{white-space:nowrap}
 /* ===== MOBILE: vua khung dien thoai (chi man hinh nho, khong dung ban in) ===== */
 @media screen and (max-width:700px){
 .sheet{width:calc(100vw - 14px);max-width:calc(100vw - 14px);margin:10px auto;padding:14px 12px}
@@ -109,8 +110,8 @@ header{padding:10px 12px}
 <div class="card"><h3 style="margin-top:0">🔥 SP bán chạy tháng này</h3><div id="dashBanChay"></div></div>
 <div class="card"><h3 style="margin-top:0">🏆 Khách nợ nhiều nhất</h3><div id="dashNo"></div></div>
 <div class="card"><h3 style="margin-top:0">📥 Cần đặt thêm</h3><div id="dashTon"></div></div>
-<div class="card"><h3 style="margin-top:0">🧾 Đơn mới nhất</h3><div id="dashDon"></div></div>
 </div>
+<div class="card"><h3 style="margin-top:0">🧾 Đơn mới nhất</h3><div id="dashDon" class="recentWrap"></div></div>
 </section>
 
 <section class="page" id="page-taodon"><div class="odHead"><h2 style="margin:0">Tạo đơn</h2><span class="odChip" id="od_nextHD">Đơn mới</span></div><div id="lastInv"></div><div class="posLayout"><div class="card posLeft"><h4>🛒 Chọn sản phẩm — bấm thẻ là thêm vào giỏ hàng bên phải</h4><input id="pos_q" placeholder="Tìm tên / mã sản phẩm..." oninput="renderPosGrid()"><div id="posBrands" class="posCats" style="margin-bottom:2px"></div><div id="posCats" class="posCats"></div><div id="posGrid" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-top:8px"></div></div>
@@ -270,7 +271,7 @@ function loadDash(){ run('getDashboard', function(d){ _revData=d.rev; $('dashTod
  $('dashBanChay').innerHTML=d.banChayThang.length?table(['Mã','Sản phẩm','ĐVT','Đã bán','Doanh thu'], d.banChayThang.map(function(x){return '<tr><td>'+x.ma+'</td><td>'+x.ten+'</td><td>'+x.dvt+'</td><td>'+fmt(x.sl)+'</td><td>'+fmt(x.doanh)+'</td></tr>'; })):'<span class="muted">Tháng này chưa có đơn nào.</span>';
  $('dashTon').innerHTML=d.canDatThem.length?table(['Mã','Hàng hoá','Tồn','Cần nhập thêm'], d.canDatThem.map(function(p){ var thieu=Math.max(0,(Number(p.tonMin)||Number((B.config||{}).TonCanhBao)||5)-p.ton); return '<tr><td>'+p.ma+'</td><td>['+p.nhom+'] '+p.ten+'</td><td class="warn">'+p.ton+'</td><td class="warn">'+fmt(thieu)+' '+p.dvt+'</td></tr>'; })):'<span class="ok">Không có hàng nào dưới mức cảnh báo.</span>';
  $('dashNo').innerHTML=d.topNo.length?table(['Khách','Nợ cuối kỳ','Quá hạn'], d.topNo.slice(0,5).map(function(x){return '<tr><td>'+x.ten+'</td><td>'+fmt(x.noCuoi)+'</td><td class="'+(x.tongQH>0?'warn':'')+'">'+fmt(x.tongQH)+'</td></tr>'; })):'<span class="ok">Không có khách nào đang nợ.</span>';
- $('dashDon').innerHTML=invTable(d.donMoiNhat); }); }
+ $('dashDon').innerHTML=invTable((d.donMoiNhat||[]).slice(0,6)); }); }
 function invTable(list){ return table(['Số HĐ','Ngày','Khách','Mặt hàng','Tổng tiền','Đã thu','Còn nợ','Đợt thu','Trạng thái',''],list.map(function(o){return '<tr><td><b>'+o.soHD+'</b></td><td>'+o.ngay+'</td><td>'+o.tenKH+'</td><td>'+o.soMatHang+'</td><td>'+fmt(o.tongTien)+'</td><td>'+fmt(o.daThu)+'</td><td class="'+(o.conNo>0?'warn':'ok')+'">'+fmt(o.conNo)+'</td><td>'+o.soDotThu+'</td><td>'+o.trangThaiDon+' / '+o.trangThaiTT+'</td><td><button class="light" onclick="openInvoice(\''+o.soHD+'\')">Xem HĐ</button></td></tr>'})); }
 function loadOrders(){ run('getOrders', function(l){ ORDERS=l; renderOrders(); }); }
 function renderOrders(){ var q=($('ord_q').value||'').toLowerCase(), tt=$('ord_tt').value; var l=ORDERS.filter(function(o){ return (!q || o.soHD.toLowerCase().indexOf(q)>=0 || String(o.tenKH).toLowerCase().indexOf(q)>=0) && (!tt || o.trangThaiDon===tt || o.trangThaiTT===tt) && periodOk_(o.ngay); }); $('orders').innerHTML=table(['Số HĐ','Ngày','Khách','Tổng','Còn nợ','Trạng thái đơn','Thanh toán',''],l.map(function(o){ var hoan=o.trangThaiDon==='Đã hoàn'; return '<tr><td><b>'+o.soHD+'</b></td><td>'+o.ngay+'</td><td>'+o.tenKH+'</td><td>'+fmt(o.tongTien)+'</td><td>'+fmt(o.conNo)+'</td><td><select onchange="run(\'updateOrderStatus\',\''+o.soHD+'\',this.value,function(){msg(\'Đã đổi trạng thái\')})">'+['Mới','Đang giao','Hoàn thành','Đã hủy','Đã hoàn'].map(function(s){return '<option '+(s===o.trangThaiDon?'selected':'')+'>'+s+'</option>'}).join('')+'</select></td><td>'+o.trangThaiTT+'</td><td><button class="light" onclick="openInvoice(\''+o.soHD+'\')">Xem / Thu tiền</button>'+(hoan?' <span class="tag">đã hoàn</span>':' <button class="light" onclick="refundInvoice(\''+o.soHD+'\')">↩ Hoàn đơn</button>')+'</td></tr>'})); }
