@@ -64,7 +64,7 @@ function saveCustomer(c) { requireRole_(['Admin','BanHang','KeToan']); var s = s
 function saveProduct(p) { requireRole_(['Admin','Kho']);
   if (!p.ma) { // để trống mã -> tự cấp theo tiền tố hãng/nhóm
     var preMap = { 'Nippon':'NIP', 'Jotun':'JOT', 'Dulux':'DUL', 'TOA':'TOA', 'Phụ kiện':'PK', 'Vật tư':'VT', 'Thiết bị':'VT' };
-    var pre = preMap[p.nhom] || 'SP'; var ss0 = sh_('SanPham'); var vv = ss0.getLastRow()>=4 ? ss0.getRange(4,1,ss0.getLastRow()-3,1).getValues() : []; var mx = 0;
+    var pre = preMap[String(p.nhom||'').split(' - ')[0]] || 'SP'; var ss0 = sh_('SanPham'); var vv = ss0.getLastRow()>=4 ? ss0.getRange(4,1,ss0.getLastRow()-3,1).getValues() : []; var mx = 0;
     vv.forEach(function(r){ var mm = String(r[0]||'').match(new RegExp('^' + pre + '(\\d+)$','i')); if (mm) { var nn = parseInt(mm[1],10); if (nn>mx) mx=nn; } });
     var num = String(mx+1); while (num.length<3) num='0'+num; p.ma = pre + num;
   }
