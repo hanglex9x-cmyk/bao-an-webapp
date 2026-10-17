@@ -123,10 +123,10 @@ function createInvoice(tk, p) { _auth(tk);
     var total = 0; p.items.forEach(function(it){ if (!prods[it.maSP]) throw new Error('Không có sản phẩm ' + it.maSP); var sl = money_(it.sl); if (sl<=0) throw new Error('Số lượng phải lớn hơn 0: ' + it.maSP); var gia = it.gia!=='' && it.gia!==undefined && it.gia!==null ? money_(it.gia) : prods[it.maSP].gia; var ck = pct_(it.ck); total += sl*gia*(1-ck); var ton = st[it.maSP] ? st[it.maSP].ton : prods[it.maSP].tonDau; if (!p.choVuotTon && ton < sl) throw new Error('Không đủ tồn: ' + prods[it.maSP].ten + ' còn ' + ton + ' ' + prods[it.maSP].dvt + ', đơn cần ' + sl); });
     var soHD = nextNo_('NhatKyBanHang', 2, 'HD'); var ngay = parseDate_(p.ngay);
     var s = sh_('NhatKyBanHang'); var row = firstEmptyRow_('NhatKyBanHang','B',4,1003);
-    p.items.forEach(function(it, idx){ var r = row+idx; var giaDefault = prods[it.maSP].gia; var gia = it.gia!=='' && it.gia!==undefined && it.gia!==null ? money_(it.gia) : giaDefault;
-      s.getRange(r,1).setValue(ngay); s.getRange(r,2).setValue(soHD); s.getRange(r,3).setValue(p.maKH); s.getRange(r,5).setValue(it.maSP); s.getRange(r,8).setValue(money_(it.sl)); s.getRange(r,10).setValue(pct_(it.ck)); s.getRange(r,13).setValue(p.ghiChu||''); s.getRange(r,14).setValue(it.mau||'');
-      if (gia !== giaDefault) s.getRange(r,9).setValue(gia); // chỉ ghi đè giá khi giá bán khác giá niêm yết, còn lại để công thức tự lấy
-    });
+    var n = p.items.length; var blkAC = [], blkE = [], blkH = [], blkJ = [], blkMN = [];
+    p.items.forEach(function(it){ blkAC.push([ngay, soHD, p.maKH]); blkE.push([it.maSP]); blkH.push([money_(it.sl)]); blkJ.push([pct_(it.ck)]); blkMN.push([p.ghiChu||'', it.mau||'']); });
+    s.getRange(row,1,n,3).setValues(blkAC); s.getRange(row,5,n,1).setValues(blkE); s.getRange(row,8,n,1).setValues(blkH); s.getRange(row,10,n,1).setValues(blkJ); s.getRange(row,13,n,2).setValues(blkMN);
+    p.items.forEach(function(it, idx){ var giaDefault = prods[it.maSP].gia; var gia = it.gia!=='' && it.gia!==undefined && it.gia!==null ? money_(it.gia) : giaDefault; if (gia !== giaDefault) s.getRange(row+idx,9).setValue(gia); });
     SpreadsheetApp.flush();
     // Đơn hàng theo dõi
     var traNgay = Math.min(money_(p.traNgay), total); var dh = sh_('DonHang'); if (dh) dh.appendRow([soHD, ngay, p.maKH, kh.ten, total, traNgay, total-traNgay, p.trangThaiDon||'Mới', traNgay>=total && total>0 ? 'Đã thu đủ' : (traNgay>0 ? 'Thu 1 phần' : 'Chưa thu'), traNgay>0?1:0, new Date(), getCurrentUser().name, p.ghiChu||'']);
@@ -137,7 +137,7 @@ function createInvoice(tk, p) { _auth(tk);
     return { soHD: soHD, soPT: soPT, tongTien: total, traNgay: traNgay, conNo: total-traNgay, diemCong: diem, tenKH: kh.ten, khMoi: khMoi };
   } finally { lock.releaseLock(); }
 }
-function ghiThuTien_(ngay, maKH, soTien, hinhThuc, soHD, ghiChu) { var s = sh_('ThuTien'); var row = firstEmptyRow_('ThuTien','B',4,2003); var soPT = nextThuNo_(); s.getRange(row,1).setValue(ngay); s.getRange(row,2).setValue(soPT); s.getRange(row,3).setValue(maKH); s.getRange(row,5).setValue(soTien); s.getRange(row,6).setValue(hinhThuc||'Tiền mặt'); s.getRange(row,7).setValue(soHD||''); s.getRange(row,8).setValue(ghiChu||''); SpreadsheetApp.flush(); return soPT; }
+function ghiThuTien_(ngay, maKH, soTien, hinhThuc, soHD, ghiChu) { var s = sh_('ThuTien'); var row = firstEmptyRow_('ThuTien','B',4,2003); var soPT = nextThuNo_(); s.getRange(row,1,1,3).setValues([[ngay, soPT, maKH]]); s.getRange(row,5,1,4).setValues([[soTien, hinhThuc||'Tiền mặt', soHD||'', ghiChu||'']]); SpreadsheetApp.flush(); return soPT; }
 
 /* ============ THU TIỀN THEO ĐỢT 2-3 ĐỢT + CÔNG NỢ ============ */
 var _payAllCache = null;
