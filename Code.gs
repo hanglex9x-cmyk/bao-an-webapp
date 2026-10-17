@@ -114,7 +114,7 @@ function createInvoice(p) {
     var soHD = nextNo_('NhatKyBanHang', 2, 'HD'); var ngay = parseDate_(p.ngay);
     var s = sh_('NhatKyBanHang'); var row = firstEmptyRow_('NhatKyBanHang','B',4,1003);
     p.items.forEach(function(it, idx){ var r = row+idx; var giaDefault = prods[it.maSP].gia; var gia = it.gia!=='' && it.gia!==undefined && it.gia!==null ? money_(it.gia) : giaDefault;
-      s.getRange(r,1).setValue(ngay); s.getRange(r,2).setValue(soHD); s.getRange(r,3).setValue(p.maKH); s.getRange(r,5).setValue(it.maSP); s.getRange(r,8).setValue(money_(it.sl)); s.getRange(r,10).setValue(pct_(it.ck)); s.getRange(r,13).setValue(p.ghiChu||'');
+      s.getRange(r,1).setValue(ngay); s.getRange(r,2).setValue(soHD); s.getRange(r,3).setValue(p.maKH); s.getRange(r,5).setValue(it.maSP); s.getRange(r,8).setValue(money_(it.sl)); s.getRange(r,10).setValue(pct_(it.ck)); s.getRange(r,13).setValue(p.ghiChu||''); s.getRange(r,14).setValue(it.mau||'');
       if (gia !== giaDefault) s.getRange(r,9).setValue(gia); // chỉ ghi đè giá khi giá bán khác giá niêm yết, còn lại để công thức tự lấy
     });
     SpreadsheetApp.flush();
@@ -154,8 +154,8 @@ function hoanDon(soHD, lyDo) {
       for (var i=0;i<vv.length;i++){ if (String(vv[i][0])===soHD) { dhRow=i+2; dhStatus=String(vv[i][7]||''); break; } } }
     if (dhStatus==='Đã hoàn') throw new Error('Đơn ' + soHD + ' đã hoàn trước đó, không hoàn 2 lần.');
     var s = sh_('NhatKyBanHang'); var lines=[];
-    if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,13).getValues().forEach(function(r){
-      if (String(r[1])===soHD) lines.push({ ngay:r[0], maKH:r[2], tenKH:r[3], maSP:r[4], tenSP:r[5], dvt:r[6], sl:money_(r[7]), ck:pct_(r[9]), tt:money_(r[10]) });
+    if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,14).getValues().forEach(function(r){
+      if (String(r[1])===soHD) lines.push({ ngay:r[0], maKH:r[2], tenKH:r[3], maSP:r[4], tenSP:r[5], dvt:r[6], sl:money_(r[7]), ck:pct_(r[9]), tt:money_(r[10]), mau:r[13]||'' });
     });
     if (!lines.length) throw new Error('Không tìm thấy dòng nào của đơn ' + soHD + ' trong NhatKyBanHang.');
     var goc = lines.filter(function(l){return l.sl>0;});
@@ -175,7 +175,7 @@ function hoanDon(soHD, lyDo) {
       s.getRange(rr,5).setValue(l.maSP);     // E Mã SP
       s.getRange(rr,8).setValue(-l.sl);      // H Số lượng âm -> hoàn tồn, công thức cột K tự tính thành tiền âm
       s.getRange(rr,10).setValue(l.ck);      // J Chiết khấu như dòng gốc
-      s.getRange(rr,13).setValue(note);      // M Ghi chú hoàn đơn
+      s.getRange(rr,13).setValue(note); s.getRange(rr,14).setValue(l.mau||'');      // M Ghi chú hoàn đơn
     });
     SpreadsheetApp.flush();
     // hoàn điểm: trừ lại số điểm đã cộng cho đơn này
@@ -230,7 +230,7 @@ function getInvoices(f) { f = f || {}; var list = groupInvoices_(); if (f.tuNgay
 function getOrders() { return getInvoices({}); }
 function updateOrderStatus(soHD, status) { requireRole_(['Admin','BanHang','Kho']); var dh = sh_('DonHang'); if (!dh) throw new Error('Chưa có tab DonHang, hãy chạy cài đặt hệ thống.'); if (dh.getLastRow()>=2) { var v = dh.getRange(2,1,dh.getLastRow()-1,1).getValues(); for (var i=0;i<v.length;i++){ if (String(v[i][0])===String(soHD)) { dh.getRange(i+2,8).setValue(status); return true; } } } // đơn cũ chưa có trong DonHang -> tạo dòng theo dõi
   var inv = groupInvoices_().filter(function(o){return o.soHD===soHD;})[0]; if (inv) dh.appendRow([soHD, parseDate_(inv.ngay), inv.maKH, inv.tenKH, inv.tongTien, inv.daThu, inv.conNo, status, inv.trangThaiTT, inv.soDotThu, new Date(), getCurrentUser().name, '']); return true; }
-function getInvoiceDetail(soHD) { var s = sh_('NhatKyBanHang'); var items = []; var head = null; var imgMap = {}; readProducts_().forEach(function(p){ imgMap[p.ma]=p.hinh; }); if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,13).getValues().forEach(function(r){ if (String(r[1])===String(soHD)) { if(!head) head = { soHD:soHD, ngay:fmtDate_(r[0]), maKH:r[2], tenKH:r[3], hanTT:fmtDate_(r[11]), ghiChu:r[12]||'' }; items.push({ maSP:r[4], tenSP:r[5], dvt:r[6], sl:money_(r[7]), gia:money_(r[8]), ck:pct_(r[9]), thanhTien:money_(r[10]), hinh: imgMap[r[4]]||'' }); } }); if (!head) throw new Error('Không tìm thấy hoá đơn ' + soHD); var tong = items.reduce(function(a,b){return a+b.thanhTien;},0); var pays = paymentsOfInvoice_(soHD); var daThu = pays.reduce(function(a,b){return a+b.soTien;},0); var kh = null; readCustomers_().forEach(function(c){ if(c.ma===head.maKH) kh=c; }); var cfg = getConfig(); var qr = ''; if (cfg.BankCode && cfg.SoTaiKhoan) qr = 'https://img.vietqr.io/image/' + encodeURIComponent(cfg.BankCode) + '-' + encodeURIComponent(cfg.SoTaiKhoan) + '-compact2.png?amount=' + Math.round(Math.max(0,tong-daThu)) + '&addInfo=' + encodeURIComponent('Thanh toan ' + soHD) + '&accountName=' + encodeURIComponent(cfg.ChuTaiKhoan||''); var diemBat = !(cfg.DiemBatTat===0 || cfg.DiemBatTat==='0' || cfg.DiemBatTat===false || cfg.DiemBatTat==='false'); return { head: head, items: items, tongTien: tong, payments: pays, daThu: daThu, conNo: Math.max(0,tong-daThu), customer: kh, config: cfg, qrUrl: qr, diemHD: diemBat ? Math.floor(tong / (cfg.TienCho1Diem||10000)) : 0 }; }
+function getInvoiceDetail(soHD) { var s = sh_('NhatKyBanHang'); var items = []; var head = null; var imgMap = {}; readProducts_().forEach(function(p){ imgMap[p.ma]=p.hinh; }); if (s && s.getLastRow()>=4) s.getRange(4,1,s.getLastRow()-3,14).getValues().forEach(function(r){ if (String(r[1])===String(soHD)) { if(!head) head = { soHD:soHD, ngay:fmtDate_(r[0]), maKH:r[2], tenKH:r[3], hanTT:fmtDate_(r[11]), ghiChu:r[12]||'' }; items.push({ maSP:r[4], tenSP:r[5], dvt:r[6], sl:money_(r[7]), gia:money_(r[8]), ck:pct_(r[9]), thanhTien:money_(r[10]), mau:r[13]||'', hinh: imgMap[r[4]]||'' }); } }); if (!head) throw new Error('Không tìm thấy hoá đơn ' + soHD); var tong = items.reduce(function(a,b){return a+b.thanhTien;},0); var pays = paymentsOfInvoice_(soHD); var daThu = pays.reduce(function(a,b){return a+b.soTien;},0); var kh = null; readCustomers_().forEach(function(c){ if(c.ma===head.maKH) kh=c; }); var cfg = getConfig(); var qr = ''; if (cfg.BankCode && cfg.SoTaiKhoan) qr = 'https://img.vietqr.io/image/' + encodeURIComponent(cfg.BankCode) + '-' + encodeURIComponent(cfg.SoTaiKhoan) + '-compact2.png?amount=' + Math.round(Math.max(0,tong-daThu)) + '&addInfo=' + encodeURIComponent('Thanh toan ' + soHD) + '&accountName=' + encodeURIComponent(cfg.ChuTaiKhoan||''); var diemBat = !(cfg.DiemBatTat===0 || cfg.DiemBatTat==='0' || cfg.DiemBatTat===false || cfg.DiemBatTat==='false'); return { head: head, items: items, tongTien: tong, payments: pays, daThu: daThu, conNo: Math.max(0,tong-daThu), customer: kh, config: cfg, qrUrl: qr, diemHD: diemBat ? Math.floor(tong / (cfg.TienCho1Diem||10000)) : 0 }; }
 
 /* ============ TỒN KHO + NHẬP HÀNG ============ */
 function getStock() { var cfg = getConfig(); return getProducts().map(function(p){ p.canNhap = p.ton <= (p.tonMin || cfg.TonCanhBao); return p; }); }
