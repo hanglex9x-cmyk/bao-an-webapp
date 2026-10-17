@@ -81,6 +81,26 @@ header{padding:10px 12px}
 .posRight table{font-size:12px}
 .kpi b{font-size:21px}
 }
+
+/* ===== SUA LECH KHOI / TRAN NGANG TREN DIEN THOAI ===== */
+.grid>*,.grid2>*,.row>*{min-width:0}
+@media screen and (max-width:700px){
+html,body{overflow-x:hidden}
+.wrap{overflow-x:hidden}
+.main{min-width:0}
+header{row-gap:6px}
+#userBox{font-size:12.5px;text-align:right;max-width:100%}
+.grid2{grid-template-columns:1fr}
+#dashBanChay,#dashNo,#dashTon{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#dashBanChay table,#dashNo table,#dashTon table{min-width:440px}
+#revChart{overflow-x:auto}
+#orders,#history{overflow-x:auto}
+#orders table,#history table{min-width:640px}
+.kpi b{font-size:22px}
+#posGrid{grid-template-columns:repeat(2,1fr)!important;gap:8px}
+.posCard img{height:96px}
+.posName{height:auto;max-height:32px}
+}
 </style></head><body>
 <div id="loginScr" style="display:none;position:fixed;inset:0;z-index:999;background:linear-gradient(120deg,#083b73,#0b5cad 45%,#0e9f6e);align-items:center;justify-content:center;padding:14px">
 <div style="background:#fff;border-radius:20px;padding:30px 26px;width:min(94vw,370px);box-shadow:0 22px 55px #0007;text-align:center">
