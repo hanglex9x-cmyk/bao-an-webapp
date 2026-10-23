@@ -136,13 +136,20 @@ function addCashEntry(tk, p){ var lock = LockService.getScriptLock(); lock.waitL
 function getBootstrap(tk) { _auth(tk); return { config: getConfig(), user: getCurrentUser(), customers: getCustomers(), products: getProducts(), catalog: catalogRead_(), brands: BRANDS, units: UNITS, today: todayStr_(), nextInvoice: nextNo_('NhatKyBanHang', 2, 'HD') }; }
 
 /* Tìm khách theo mã/tên; chưa có thì tự tạo với mã KH tự động (dùng khi lập đơn gõ tên khách) */
+function backfillSdt_(maKH, sdt) {
+  sdt = String(sdt||'').trim(); if (!maKH || !sdt) return;
+  try { var s = sh_('KhachHang'); if (!s || s.getLastRow()<4) return;
+    var v = s.getRange(4,1,s.getLastRow()-3,4).getValues();
+    for (var i=0;i<v.length;i++) { if (String(v[i][0])===String(maKH)) { if (!String(v[i][3]||'').trim()) s.getRange(4+i,4).setValue(sdt); break; } }
+  } catch(e) {}
+}
 function resolveCustomer_(p, cusIn) {
   var cus = cusIn || readCustomers_();
   var ma = String(p.maKH||'').trim();
-  if (ma && cus.some(function(c){return c.ma===ma;})) { p.maKH = ma; return ''; }
+  if (ma) { var byMa = null; cus.forEach(function(c){ if (c.ma===ma) byMa = c; }); if (byMa) { p.maKH = ma; if (!String(byMa.sdt||'').trim()) backfillSdt_(ma, p.sdtKH); return ''; } }
   var ten = String(p.tenKH||'').trim(); if (!ten) throw new Error('Chưa nhập tên khách hàng.');
   var found = null; cus.forEach(function(c){ if (String(c.ten||'').trim().toLowerCase() === ten.toLowerCase()) found = c; });
-  if (found) { p.maKH = found.ma; return ''; }
+  if (found) { p.maKH = found.ma; if (!String(found.sdt||'').trim()) backfillSdt_(found.ma, p.sdtKH); return ''; }
   var s = sh_('KhachHang'); var v = s.getLastRow()>=4 ? s.getRange(4,1,s.getLastRow()-3,1).getValues() : [];
   var mx = 0; v.forEach(function(r){ var mm = String(r[0]||'').match(/^KH(\d+)$/i); if (mm) { var nn = parseInt(mm[1],10); if (nn>mx) mx=nn; } });
   var num = String(mx+1); while (num.length<3) num='0'+num; var maMoi = 'KH'+num;
